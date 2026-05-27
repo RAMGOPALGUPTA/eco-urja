@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArcLight · Eco-Urja AI Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #040b14;
+    --panel: #071428;
+    --border: #0f2a4a;
+    --teal: #00e5c0;
+    --teal-dim: #00a98c;
+    --amber: #f5a623;
+    --red: #ff4c5e;
+    --blue: #1a8fff;
+    --text: #c8dff0;
+    --muted: #4a6a8a;
+    --grid: rgba(0,229,192,0.04);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid BG */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow top */
+  body::after {
+    content: '';
+    position: fixed; top: -200px; left: 50%; transform: translateX(-50%);
+    width: 800px; height: 400px;
+    background: radial-gradient(ellipse, rgba(0,229,192,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 32px;
+    background: rgba(4,11,20,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 20px;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--teal), #007aff);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .logo span { color: var(--teal); }
+
+  .nav-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--teal);
+  }
+
+  .pulse-dot {
+    width: 8px; height: 8px;
+    background: var(--teal);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); box-shadow:0 0 0 0 rgba(0,229,192,0.4); }
+    50% { opacity:0.7; transform:scale(1.1); box-shadow:0 0 0 6px rgba(0,229,192,0); }
+  }
+
+  .nav-time { font-size: 11px; color: var(--muted); }
+
+  /* ── MAIN LAYOUT ── */
+  .wrapper {
+    position: relative; z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+  }
+
+  /* ── ALERT BANNER ── */
+  .alert-banner {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    margin-bottom: 24px;
+    font-size: 12px;
+    border: 1px solid;
+    animation: slideDown 0.5s ease;
+    transition: all 0.3s;
+  }
+
+  @keyframes slideDown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+
+  .alert-normal { background: rgba(0,229,192,0.05); border-color: rgba(0,229,192,0.2); color: var(--teal); }
+  .alert-warning { background: rgba(245,166,35,0.08); border-color: rgba(245,166,35,0.3); color: var(--amber); }
+  .alert-danger  { background: rgba(255,76,94,0.1);  border-color: rgba(255,76,94,0.35);  color: var(--red); animation: slideDown 0.5s ease, blink 1s ease infinite; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+  .alert-icon { font-size: 18px; }
+  .alert-text { flex: 1; }
+  .alert-text strong { font-weight: 500; display: block; }
+
+  /* ── KPI ROW ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .kpi {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .kpi:hover { border-color: var(--teal-dim); }
+
+  .kpi::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+
+  .kpi.teal::before  { background: linear-gradient(90deg, var(--teal), transparent); }
+  .kpi.amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+  .kpi.blue::before  { background: linear-gradient(90deg, var(--blue), transparent); }
+  .kpi.red::before   { background: linear-gradient(90deg, var(--red), transparent); }
+  .kpi.purple::before{ background: linear-gradient(90deg, #b57bee, transparent); }
+
+  .kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .kpi-value { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 700; color: #fff; line-height: 1; }
+  .kpi-unit  { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .kpi-delta {
+    position: absolute; top: 16px; right: 16px;
+    font-size: 10px; padding: 2px 7px;
+    border-radius: 20px;
+  }
+
+  .kpi-delta.up   { background: rgba(0,229,192,0.1); color: var(--teal); }
+  .kpi-delta.down { background: rgba(255,76,94,0.1);  color: var(--red); }
+  .kpi-delta.warn { background: rgba(245,166,35,0.1); color: var(--amber); }
+
+  /* ── GRID ── */
+  .grid-main {
+    display: grid;
+    grid-template-columns: 1fr 1fr 360px;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .grid-bottom {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .panel-title .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px; font-weight: 400;
+    background: rgba(0,229,192,0.1);
+    color: var(--teal);
+    padding: 2px 7px; border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  .panel-sub { font-size: 10px; color: var(--muted); margin-bottom: 18px; }
+
+  /* ── WAVEFORM CHART ── */
+  canvas { display: block; }
+
+  /* ── SEISMIC MAP ── */
+  .seismic-map {
+    position: relative;
+    width: 100%; height: 220px;
+    background: radial-gradient(ellipse at 60% 50%, rgba(0,229,192,0.04) 0%, transparent 60%);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .map-grid-line {
+    position: absolute;
+    background: var(--border);
+  }
+
+  .sensor-node {
+    position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+
+  .sensor-node:hover { transform: translate(-50%,-50%) scale(1.4); }
+
+  .sensor-node::after {
+    content: '';
+    position: absolute; inset: -4px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    opacity: 0.3;
+    animation: ripple 2s infinite;
+  }
+
+  @keyframes ripple {
+    from { opacity:0.4; transform:scale(1); }
+    to   { opacity:0; transform:scale(2); }
+  }
+
+  .sensor-node.safe    { background: var(--teal); color: var(--teal); }
+  .sensor-node.warning { background: var(--amber); color: var(--amber); }
+  .sensor-node.danger  { background: var(--red); color: var(--red); animation: nod 0.4s infinite alternate; }
+
+  @keyframes nod { from{transform:translate(-50%,-50%) scale(1)} to{transform:translate(-50%,-50%) scale(1.3)} }
+
+  .node-label {
+    position: absolute;
+    top: -22px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; color: var(--text);
+    white-space: nowrap;
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ── AI LOG ── */
+  .ai-log {
+    height: 200px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .log-entry {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    animation: fadeIn 0.4s ease;
+  }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+
+  .log-time { color: var(--muted); white-space: nowrap; min-width: 55px; }
+
+  .log-type {
+    padding: 1px 6px; border-radius: 3px;
+    font-size: 9px; font-weight: 500;
+    white-space: nowrap; min-width: 52px; text-align: center;
+  }
+
+  .log-type.info    { background: rgba(26,143,255,0.15); color: var(--blue); }
+  .log-type.alert   { background: rgba(245,166,35,0.15); color: var(--amber); }
+  .log-type.critical{ background: rgba(255,76,94,0.15);  color: var(--red); }
+  .log-type.ok      { background: rgba(0,229,192,0.1);   color: var(--teal); }
+
+  .log-msg { color: var(--text); line-height: 1.4; }
+
+  /* ── ENERGY BARS ── */
+  .energy-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .energy-label { font-size: 11px; color: var(--muted); min-width: 90px; }
+
+  .bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s ease;
+    position: relative;
+  }
+
+  .bar-fill::after {
+    content: '';
+    position: absolute; top:0; right:0; bottom:0; width: 20px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2));
+  }
+
+  .energy-val { font-size: 11px; color: #fff; min-width: 40px; text-align: right; }
+
+  /* ── AI RISK GAUGE ── */
+  .gauge-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 10px 0;
+  }
+
+  .gauge-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+
+  /* ── FOOTER ── */
+  .footer-note {
+    text-align: center;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 30px;
+  }
+
+  /* responsive */
+  @media(max-width: 1100px) {
+    .grid-main { grid-template-columns: 1fr 1fr; }
+    .kpi-row { grid-template-columns: repeat(3,1fr); }
+  }
+
+  @media(max-width: 720px) {
+    .grid-main, .grid-bottom { grid-template-columns: 1fr; }
+    .kpi-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    Arc<span>Light</span> &nbsp;·&nbsp; Eco-Urja
+  </div>
+  <div class="nav-status">
+    <div class="pulse-dot"></div>
+    AI MONITORING ACTIVE
+  </div>
+  <div class="nav-time" id="clock">--:--:--</div>
+</nav>
+
+<div class="wrapper">
+
+  <!-- ALERT BANNER -->
+  <div class="alert-banner alert-normal" id="alertBanner">
+    <div class="alert-icon">🟢</div>
+    <div class="alert-text">
+      <strong>System Status: ALL NOMINAL</strong>
+      AI engine running · 12 sensors online · Last scan 0.8s ago
+    </div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div class="kpi-row">
+    <div class="kpi teal">
+      <div class="kpi-label">Energy Harvested</div>
+      <div class="kpi-value" id="kpiEnergy">4.72</div>
+      <div class="kpi-unit">kWh today</div>
+      <div class="kpi-delta up" id="kpiEnergyDelta">▲ 12%</div>
+    </div>
+    <div class="kpi blue">
+      <div class="kpi-label">Vibration Index</div>
+      <div class="kpi-value" id="kpiVib">0.38</div>
+      <div class="kpi-unit">g (avg)</div>
+      <div class="kpi-delta up" id="kpiVibDelta">▲ 3%</div>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-label">Air Quality (AQI)</div>
+      <div class="kpi-value" id="kpiAQI">67</div>
+      <div class="kpi-unit">moderate</div>
+      <div class="kpi-delta warn" id="kpiAQIDelta">↔ 0%</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-label">Landslide Risk</div>
+      <div class="kpi-value" id="kpiRisk">LOW</div>
+      <div class="kpi-unit">AI assessment</div>
+      <div class="kpi-delta up" id="kpiRiskDelta">STABLE</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">CO₂ Offset</div>
+      <div class="kpi-value">2.1</div>
+      <div class="kpi-unit">tonnes/month</div>
+      <div class="kpi-delta up">▲ 7%</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="grid-main">
+
+    <!-- WAVEFORM -->
+    <div class="panel">
+      <div class="panel-title">Piezo Vibration Feed <span class="badge">LIVE</span></div>
+      <div class="panel-sub">Real-time waveform from seismic sensor array</div>
+      <canvas id="waveCanvas" width="400" height="140"></canvas>
+    </div>
+
+    <!-- ENERGY CHART -->
+    <div class="panel">
+      <div class="panel-title">Energy Harvest — Last 24h <span class="badge">AI OPT</span></div>
+      <div class="panel-sub">Piezo + rain turbine + footfall combined output</div>
+      <canvas id="energyCanvas" width="400" height="140"></canvas>
+    </div>
+
+    <!-- SIDEBAR: RISK + LOG -->
+    <div class="panel">
+      <div class="panel-title">AI Risk Engine</div>
+      <div class="panel-sub">Anomaly detection · landslide probability model</div>
+
+      <div class="gauge-wrap">
+        <div class="gauge-label">Landslide Probability</div>
+        <canvas id="gaugeCanvas" width="160" height="90"></canvas>
+        <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#fff;margin-top:4px" id="gaugeVal">8%</div>
+        <div style="font-size:10px;color:var(--teal);margin-top:2px">LOW RISK</div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="energy-row">
+          <div class="energy-label">Soil moisture</div>
+          <div class="bar-track"><div class="bar-fill" style="width:34%;background:linear-gradient(90deg,#1a8fff,#00e5c0)"></div></div>
+          <div class="energy-val">34%</div>
+        </div>
+        <div class="energy-row">
+          <div class="energy-label">Slope vibration</div>
+          <div class="bar-track"><div class="bar-fill" id="slopeBar" style="width:18%;background:linear-gradient(90deg,#00e5c0,#1a8fff)"></div></div>
+          <div class="energy-val" id="slopeVal">18%</div>
+        </div>
+        <div class="energy-row">
+          <div class="energy-label">Rain intensity</div>
+          <div class="bar-track"><div class="bar-fill" style="width:55%;background:linear-gradient(90deg,#1a8fff,#b57bee)"></div></div>
+          <div class="energy-val">55%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM GRID -->
+  <div class="grid-bottom">
+
+    <!-- SENSOR MAP + LOG -->
+    <div class="panel">
+      <div class="panel-title">Sensor Network Map <span class="badge">12 NODES</span></div>
+      <div class="panel-sub">Geospatial overview — hilly region deployment (Shimla sector)</div>
+
+      <div class="seismic-map" id="sensorMap">
+        <!-- nodes injected by JS -->
+      </div>
+
+      <div style="margin-top:16px">
+        <div class="panel-title" style="font-size:12px;margin-bottom:10px">AI Event Log</div>
+        <div class="ai-log" id="aiLog"></div>
+      </div>
+    </div>
+
+    <!-- ENERGY SOURCES -->
+    <div class="panel">
+      <div class="panel-title">Energy Sources</div>
+      <div class="panel-sub">Contribution by harvest method</div>
+
+      <canvas id="pieCanvas" width="300" height="160" style="margin:0 auto;display:block"></canvas>
+
+      <div style="margin-top:18px">
+        <div class="energy-row">
+          <div class="energy-label">Piezoelectric</div>
+          <div class="bar-track"><div class="bar-fill" style="width:45%;background:linear-gradient(90deg,var(--teal),#00a98c)"></div></div>
+          <div class="energy-val" id="piezoVal">45%</div>
+        </div>
+        <div class="energy-row">
+          <div class="energy-label">Rain turbine</div>
+          <div class="bar-track"><div class="bar-fill" style="width:28%;background:linear-gradient(90deg,var(--blue),#1a5fff)"></div></div>
+          <div class="energy-val">28%</div>
+        </div>
+        <div class="energy-row">
+          <div class="energy-label">Footfall / Kinetic</div>
+          <div class="bar-track"><div class="bar-fill" style="width:18%;background:linear-gradient(90deg,#b57bee,#7b3fbf)"></div></div>
+          <div class="energy-val">18%</div>
+        </div>
+        <div class="energy-row">
+          <div class="energy-label">Sound / Ambient</div>
+          <div class="bar-track"><div class="bar-fill" style="width:9%;background:linear-gradient(90deg,var(--amber),#c07a00)"></div></div>
+          <div class="energy-val">9%</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;padding:12px;background:rgba(0,229,192,0.05);border:1px solid rgba(0,229,192,0.15);border-radius:8px">
+        <div style="font-size:10px;color:var(--teal);font-weight:500;margin-bottom:6px">🤖 AI INSIGHT</div>
+        <div style="font-size:11px;color:var(--text);line-height:1.6" id="aiInsight">
+          Piezoelectric output 12% above baseline. Recommending battery pre-charge cycle before predicted rainfall window at 19:30 hrs.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer-note">
+    ArcLight · Eco-Urja AI Monitoring System &nbsp;·&nbsp; Prototype v1.0 &nbsp;·&nbsp; Turning Vibrations Into Energy, And Energy Into Safety.
+  </div>
+</div>
+
+<script>
+// ── CLOCK ──
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── WAVEFORM ──
+const waveCtx = document.getElementById('waveCanvas').getContext('2d');
+const waveCanvas = document.getElementById('waveCanvas');
+let waveData = Array(120).fill(0);
+let waveAnomaly = false;
+let waveAnomalyTimer = 0;
+
+function drawWave() {
+  const W = waveCanvas.offsetWidth || 400;
+  waveCanvas.width = W;
+  const H = 140;
+  waveCtx.clearRect(0,0,W,H);
+
+  // background gradient
+  const bg = waveCtx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'rgba(0,229,192,0.03)');
+  bg.addColorStop(1,'transparent');
+  waveCtx.fillStyle = bg; waveCtx.fillRect(0,0,W,H);
+
+  // center line
+  waveCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+  waveCtx.lineWidth = 1;
+  waveCtx.beginPath(); waveCtx.moveTo(0,H/2); waveCtx.lineTo(W,H/2); waveCtx.stroke();
+
+  // wave
+  const color = waveAnomaly ? '#ff4c5e' : '#00e5c0';
+  const grad = waveCtx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,'transparent');
+  grad.addColorStop(0.2, color);
+  grad.addColorStop(0.8, color);
+  grad.addColorStop(1,'transparent');
+
+  waveCtx.strokeStyle = grad;
+  waveCtx.lineWidth = 2;
+  waveCtx.shadowColor = color;
+  waveCtx.shadowBlur = 8;
+  waveCtx.beginPath();
+  waveData.forEach((v,i) => {
+    const x = (i / (waveData.length-1)) * W;
+    const y = H/2 - v * (H*0.38);
+    i===0 ? waveCtx.moveTo(x,y) : waveCtx.lineTo(x,y);
+  });
+  waveCtx.stroke();
+  waveCtx.shadowBlur = 0;
+
+  // fill
+  waveCtx.beginPath();
+  waveData.forEach((v,i) => {
+    const x = (i / (waveData.length-1)) * W;
+    const y = H/2 - v * (H*0.38);
+    i===0 ? waveCtx.moveTo(x,y) : waveCtx.lineTo(x,y);
+  });
+  waveCtx.lineTo(W,H/2); waveCtx.lineTo(0,H/2); waveCtx.closePath();
+  const fillGrad = waveCtx.createLinearGradient(0,0,0,H);
+  fillGrad.addColorStop(0, waveAnomaly ? 'rgba(255,76,94,0.15)' : 'rgba(0,229,192,0.12)');
+  fillGrad.addColorStop(1,'transparent');
+  waveCtx.fillStyle = fillGrad;
+  waveCtx.fill();
+}
+
+function updateWave() {
+  const base = waveAnomaly ? 0.7 : 0.2;
+  const newVal = (Math.random() - 0.5) * 2 * (base + Math.sin(Date.now()/800)*0.15);
+  waveData.push(newVal); waveData.shift();
+  drawWave();
+  if (waveAnomalyTimer > 0) { waveAnomalyTimer--; if(!waveAnomalyTimer) endAnomaly(); }
+}
+setInterval(updateWave, 80);
+
+// ── 24H ENERGY CHART ──
+const eCtx = document.getElementById('energyCanvas').getContext('2d');
+const eCanvas = document.getElementById('energyCanvas');
+const hours = Array.from({length:24},(_,i)=>i);
+const energyData = hours.map(h => {
+  const peak = (h>=7&&h<=9)||(h>=17&&h<=20) ? 1 : 0.3;
+  return 0.5 + Math.random() * peak * 2.5;
+});
+
+function drawEnergy() {
+  const W = eCanvas.offsetWidth || 400;
+  eCanvas.width = W;
+  const H = 140;
+  const pad = {l:30,r:10,t:10,b:24};
+  const dW = W - pad.l - pad.r;
+  const dH = H - pad.t - pad.b;
+  eCtx.clearRect(0,0,W,H);
+
+  const maxV = Math.max(...energyData);
+
+  // grid
+  [0.25,0.5,0.75,1].forEach(f => {
+    const y = pad.t + dH*(1-f);
+    eCtx.strokeStyle = 'rgba(255,255,255,0.04)';
+    eCtx.lineWidth=1;
+    eCtx.beginPath(); eCtx.moveTo(pad.l,y); eCtx.lineTo(W-pad.r,y); eCtx.stroke();
+  });
+
+  // fill
+  eCtx.beginPath();
+  energyData.forEach((v,i) => {
+    const x = pad.l + (i/(energyData.length-1))*dW;
+    const y = pad.t + dH*(1 - v/maxV);
+    i===0 ? eCtx.moveTo(x,y) : eCtx.lineTo(x,y);
+  });
+  eCtx.lineTo(W-pad.r, pad.t+dH);
+  eCtx.lineTo(pad.l, pad.t+dH);
+  eCtx.closePath();
+  const fg = eCtx.createLinearGradient(0,pad.t,0,pad.t+dH);
+  fg.addColorStop(0,'rgba(0,229,192,0.35)');
+  fg.addColorStop(1,'rgba(0,229,192,0.02)');
+  eCtx.fillStyle = fg; eCtx.fill();
+
+  // line
+  eCtx.beginPath();
+  energyData.forEach((v,i) => {
+    const x = pad.l + (i/(energyData.length-1))*dW;
+    const y = pad.t + dH*(1 - v/maxV);
+    i===0 ? eCtx.moveTo(x,y) : eCtx.lineTo(x,y);
+  });
+  eCtx.strokeStyle = '#00e5c0'; eCtx.lineWidth=2;
+  eCtx.shadowColor='#00e5c0'; eCtx.shadowBlur=8;
+  eCtx.stroke(); eCtx.shadowBlur=0;
+
+  // X labels
+  eCtx.fillStyle = 'rgba(74,106,138,0.9)';
+  eCtx.font = '9px IBM Plex Mono';
+  eCtx.textAlign='center';
+  [0,6,12,18,23].forEach(i => {
+    const x = pad.l + (i/(energyData.length-1))*dW;
+    eCtx.fillText(i+'h', x, H-4);
+  });
+}
+drawEnergy();
+
+// ── GAUGE ──
+const gCtx = document.getElementById('gaugeCanvas').getContext('2d');
+let gaugePercent = 8;
+
+function drawGauge(pct) {
+  const W=160,H=90;
+  gCtx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H-10, r=70;
+  const startA = Math.PI, endA = 2*Math.PI;
+
+  // track
+  gCtx.beginPath();
+  gCtx.arc(cx,cy,r,startA,endA);
+  gCtx.strokeStyle='rgba(255,255,255,0.06)';
+  gCtx.lineWidth=12; gCtx.lineCap='round';
+  gCtx.stroke();
+
+  // fill
+  const color = pct<30?'#00e5c0': pct<60?'#f5a623':'#ff4c5e';
+  const angle = startA + (pct/100)*Math.PI;
+  gCtx.beginPath();
+  gCtx.arc(cx,cy,r,startA,angle);
+  gCtx.strokeStyle=color;
+  gCtx.lineWidth=12; gCtx.lineCap='round';
+  gCtx.shadowColor=color; gCtx.shadowBlur=16;
+  gCtx.stroke(); gCtx.shadowBlur=0;
+}
+drawGauge(gaugePercent);
+
+// ── SENSOR MAP ──
+const sensors = [
+  {id:'S-01',x:20,y:30,status:'safe',label:'Ridge-N'},
+  {id:'S-02',x:45,y:55,status:'safe',label:'Valley'},
+  {id:'S-03',x:70,y:20,status:'safe',label:'Peak-E'},
+  {id:'S-04',x:30,y:75,status:'safe',label:'Base-W'},
+  {id:'S-05',x:60,y:70,status:'safe',label:'Slope-S'},
+  {id:'S-06',x:80,y:50,status:'safe',label:'Ridge-E'},
+  {id:'S-07',x:15,y:55,status:'safe',label:'River'},
+  {id:'S-08',x:50,y:40,status:'safe',label:'Central'},
+];
+
+function buildMap() {
+  const map = document.getElementById('sensorMap');
+  map.innerHTML = '';
+  sensors.forEach(s => {
+    const node = document.createElement('div');
+    node.className = `sensor-node ${s.status}`;
+    node.style.left = s.x+'%'; node.style.top = s.y+'%';
+    node.title = `${s.id} · ${s.label} · ${s.status.toUpperCase()}`;
+    const lbl = document.createElement('div');
+    lbl.className = 'node-label'; lbl.textContent = s.id;
+    node.appendChild(lbl);
+    map.appendChild(node);
+  });
+}
+buildMap();
+
+// ── PIE CHART ──
+const pCtx = document.getElementById('pieCanvas').getContext('2d');
+function drawPie() {
+  const W=300,H=160;
+  pCtx.clearRect(0,0,W,H);
+  const data=[{v:45,c:'#00e5c0'},{v:28,c:'#1a8fff'},{v:18,c:'#b57bee'},{v:9,c:'#f5a623'}];
+  const labels=['Piezo','Rain','Footfall','Sound'];
+  let start=-Math.PI/2;
+  const cx=80,cy=H/2,r=58;
+  data.forEach((d,i) => {
+    const slice = (d.v/100)*2*Math.PI;
+    pCtx.beginPath();
+    pCtx.moveTo(cx,cy);
+    pCtx.arc(cx,cy,r,start,start+slice);
+    pCtx.closePath();
+    pCtx.fillStyle=d.c;
+    pCtx.shadowColor=d.c; pCtx.shadowBlur=6;
+    pCtx.fill(); pCtx.shadowBlur=0;
+    // gap
+    pCtx.beginPath();
+    pCtx.moveTo(cx,cy);
+    pCtx.arc(cx,cy,r,start,start+slice);
+    pCtx.closePath();
+    pCtx.strokeStyle='rgba(4,11,20,0.6)'; pCtx.lineWidth=2;
+    pCtx.stroke();
+    start += slice;
+  });
+  // hole
+  pCtx.beginPath(); pCtx.arc(cx,cy,28,0,2*Math.PI);
+  pCtx.fillStyle='#071428'; pCtx.fill();
+
+  // legend
+  pCtx.font='10px IBM Plex Mono';
+  data.forEach((d,i) => {
+    const y = 20 + i*28;
+    pCtx.fillStyle=d.c;
+    pCtx.fillRect(165,y-8,10,10);
+    pCtx.fillStyle='rgba(200,223,240,0.7)';
+    pCtx.fillText(labels[i], 182, y);
+    pCtx.fillStyle=d.c;
+    pCtx.fillText(d.v+'%', 240, y);
+  });
+}
+drawPie();
+
+// ── AI LOG ──
+const logMessages = [
+  {type:'ok',   msg:'System boot complete. All 12 sensors online.'},
+  {type:'info', msg:'Rainfall detected — kinetic harvesting activated.'},
+  {type:'info', msg:'Vibration spike at S-03 (0.62g) — within threshold.'},
+  {type:'ok',   msg:'Battery bank at 87% — optimal capacity maintained.'},
+  {type:'alert',msg:'AQI rising in Zone-B. Algae purifier load increased.'},
+  {type:'info', msg:'Footfall sensor S-08: 2,400 steps/hr logged.'},
+  {type:'ok',   msg:'AI model v3.2 prediction check passed.'},
+  {type:'info', msg:'Soil moisture stable across slope sensors.'},
+];
+
+let logIdx = 0;
+function addLog(type, msg) {
+  const log = document.getElementById('aiLog');
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-type ${type}">${type.toUpperCase()}</span><span class="log-msg">${msg}</span>`;
+  log.insertBefore(entry, log.firstChild);
+  while(log.children.length > 20) log.removeChild(log.lastChild);
+}
+
+logMessages.forEach((m,i) => setTimeout(() => addLog(m.type, m.msg), i*800));
+setInterval(() => {
+  const next = logMessages[logIdx % logMessages.length];
+  addLog(next.type, next.msg);
+  logIdx++;
+}, 5000);
+
+// ── SIMULATE ANOMALY ──
+let anomalyMode = false;
+let anomalyCountdown = 0;
+
+function triggerAnomaly() {
+  anomalyMode = true;
+  waveAnomaly = true;
+  waveAnomalyTimer = 120; // ~10 seconds
+  anomalyCountdown = 120;
+
+  // update KPIs
+  document.getElementById('kpiRisk').textContent = 'HIGH';
+  document.getElementById('kpiRiskDelta').textContent = '⚠ ALERT';
+  document.getElementById('kpiRiskDelta').className = 'kpi-delta down';
+  document.getElementById('kpiVib').textContent = '1.84';
+  document.getElementById('kpiVibDelta').textContent = '▲ 384%';
+  document.getElementById('kpiVibDelta').className = 'kpi-delta down';
+
+  gaugePercent = 74;
+  drawGauge(74);
+  document.getElementById('gaugeVal').textContent = '74%';
+  document.getElementById('gaugeVal').nextElementSibling.textContent = '⚠ HIGH RISK';
+  document.getElementById('gaugeVal').nextElementSibling.style.color = 'var(--amber)';
+
+  // slope bar
+  document.getElementById('slopeBar').style.width = '82%';
+  document.getElementById('slopeBar').style.background = 'linear-gradient(90deg,#ff4c5e,#f5a623)';
+  document.getElementById('slopeVal').textContent = '82%';
+
+  // alert
+  const banner = document.getElementById('alertBanner');
+  banner.className = 'alert-banner alert-danger';
+  banner.innerHTML = '<div class="alert-icon">🔴</div><div class="alert-text"><strong>⚠ ANOMALY DETECTED — LANDSLIDE RISK ELEVATED</strong>Abnormal vibration spike at S-03 & S-06 · AI model predicting 74% risk · Emergency protocol initiated</div>';
+
+  // mark sensor
+  sensors[2].status = 'danger';
+  sensors[5].status = 'warning';
+  buildMap();
+
+  addLog('critical','ANOMALY: S-03 vibration spike 1.84g — landslide risk ELEVATED!');
+  addLog('alert','Activating emergency alert to District Control Center.');
+
+  document.getElementById('aiInsight').textContent =
+    '⚠ Abnormal seismic pattern detected. Correlating with soil moisture (78%) and rainfall data. AI recommends immediate area evacuation advisory.';
+
+  setTimeout(endAnomaly, 12000);
+}
+
+function endAnomaly() {
+  anomalyMode = false;
+  waveAnomaly = false;
+
+  document.getElementById('kpiRisk').textContent = 'LOW';
+  document.getElementById('kpiRiskDelta').textContent = 'STABLE';
+  document.getElementById('kpiRiskDelta').className = 'kpi-delta up';
+  document.getElementById('kpiVib').textContent = '0.38';
+  document.getElementById('kpiVibDelta').textContent = '▲ 3%';
+  document.getElementById('kpiVibDelta').className = 'kpi-delta up';
+
+  gaugePercent = 8;
+  drawGauge(8);
+  document.getElementById('gaugeVal').textContent = '8%';
+  document.getElementById('gaugeVal').nextElementSibling.textContent = 'LOW RISK';
+  document.getElementById('gaugeVal').nextElementSibling.style.color = 'var(--teal)';
+
+  document.getElementById('slopeBar').style.width = '18%';
+  document.getElementById('slopeBar').style.background = 'linear-gradient(90deg,var(--teal),var(--blue))';
+  document.getElementById('slopeVal').textContent = '18%';
+
+  const banner = document.getElementById('alertBanner');
+  banner.className = 'alert-banner alert-normal';
+  banner.innerHTML = '<div class="alert-icon">🟢</div><div class="alert-text"><strong>System Status: ALL NOMINAL</strong>AI engine running · 12 sensors online · Anomaly resolved</div>';
+
+  sensors[2].status = 'safe';
+  sensors[5].status = 'safe';
+  buildMap();
+
+  addLog('ok','Vibration levels normalized. All-clear issued by AI engine.');
+  document.getElementById('aiInsight').textContent =
+    'Piezoelectric output 12% above baseline. Recommending battery pre-charge cycle before predicted rainfall window at 19:30 hrs.';
+}
+
+// auto trigger anomaly after 8s for demo
+setTimeout(triggerAnomaly, 8000);
+// and again periodically
+setInterval(triggerAnomaly, 30000);
+
+// fluctuate energy KPI
+setInterval(() => {
+  const base = 4.72 + (Math.random()-0.5)*0.3;
+  document.getElementById('kpiEnergy').textContent = base.toFixed(2);
+}, 3000);
+
+// fluctuate AQI
+setInterval(() => {
+  const aqi = 60 + Math.floor(Math.random()*20);
+  document.getElementById('kpiAQI').textContent = aqi;
+}, 4000);
+</script>
+</body>
+</html>
